@@ -4,12 +4,64 @@ Large Language Model (LLM) implementations for pdf2podcast.
 
 import os
 import re
-from typing import Dict, Any, Optional
+import time
+import logging
+from typing import Dict, Any, Optional, Callable
+from functools import wraps
 from dotenv import load_dotenv
 
 from langchain_google_genai import ChatGoogleGenerativeAI
+from google.api_core import retry
+from google.api_core.exceptions import GoogleAPIError
 from .base import BaseLLM
 from .prompts import PodcastPromptBuilder
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+
+def retry_on_exception(
+    retries: int = 3,
+    delay: float = 1.0,
+    backoff: float = 2.0,
+    exceptions: tuple = (GoogleAPIError,),
+) -> Callable:
+    """
+    Retry decorator with exponential backoff.
+
+    Args:
+        retries (int): Maximum number of retries
+        delay (float): Initial delay between retries in seconds
+        backoff (float): Backoff multiplier
+        exceptions (tuple): Exceptions to catch
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            retry_delay = delay
+            last_exception = None
+
+            for i in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    if i < retries - 1:
+                        logger.warning(
+                            f"Attempt {i + 1}/{retries} failed: {str(e)}. "
+                            f"Retrying in {retry_delay:.1f}s..."
+                        )
+                        time.sleep(retry_delay)
+                        retry_delay *= backoff
+                    else:
+                        logger.error(f"All {retries} attempts failed.")
+
+            raise last_exception
+
+        return wrapper
+
+    return decorator
 
 
 class GeminiLLM(BaseLLM):
@@ -57,7 +109,15 @@ class GeminiLLM(BaseLLM):
         )
 
     def _clean_text(self, text: str) -> str:
-        """Clean text using regex patterns to remove visual references."""
+        """
+        Clean text using regex patterns to remove visual references and formatting.
+
+        Args:
+            text (str): Input text to clean
+
+        Returns:
+            str: Cleaned text with visual references removed
+        """
         patterns = [
             r"(Figure|Fig\.|Table|Image)\s+\d+[a-z]?",
             r"(shown|illustrated|depicted|as seen) (in|on|above|below)",
@@ -73,6 +133,7 @@ class GeminiLLM(BaseLLM):
         processed = re.sub(r"\s+", " ", processed)
         return processed.strip()
 
+    @retry_on_exception()
     def generate_podcast_script(
         self,
         text: str,
@@ -95,34 +156,60 @@ class GeminiLLM(BaseLLM):
             str: Generated podcast script
         """
         try:
-            # Clean text
-            processed_text = self._clean_text(text)
+            # Clean and validate input text
+            if not text or not text.strip():
+                raise ValueError("Input text cannot be empty")
 
-            # Generate initial script
-            prompt = self.prompt_builder.build_prompt(
-                text=processed_text,
-                complexity=complexity,
-                target_audience=target_audience,
-                min_length=min_length,
-                **kwargs,
+            processed_text = self._clean_text(text)
+            if not processed_text:
+                raise ValueError("Text cleaning resulted in empty content")
+
+            logger.info(
+                f"Generating script with complexity: {complexity}, target length: {min_length}"
             )
 
-            response = self.llm.invoke(prompt)
-            script = response.content.strip()
-
-            # Expand if needed
-            if len(script) < min_length:
-                expand_prompt = self.prompt_builder.build_expand_prompt(
-                    text=script,
+            # Generate initial script
+            try:
+                prompt = self.prompt_builder.build_prompt(
+                    text=processed_text,
                     complexity=complexity,
                     target_audience=target_audience,
                     min_length=min_length,
                     **kwargs,
                 )
-                response = self.llm.invoke(expand_prompt)
+
+                response = self.llm.invoke(prompt)
                 script = response.content.strip()
 
-            return script
+                # Expand if needed
+                if len(script) < min_length:
+                    logger.info(
+                        f"Initial script length ({len(script)}) below target ({min_length}). "
+                        "Expanding content..."
+                    )
+                    expand_prompt = self.prompt_builder.build_expand_prompt(
+                        text=script,
+                        complexity=complexity,
+                        target_audience=target_audience,
+                        min_length=min_length,
+                        **kwargs,
+                    )
+                    response = self.llm.invoke(expand_prompt)
+                    script = response.content.strip()
 
+                logger.info(f"Successfully generated script of length {len(script)}")
+                return script
+
+            except GoogleAPIError as e:
+                logger.error(f"Google API error: {str(e)}")
+                raise  # Will be caught by retry decorator
+            except Exception as e:
+                logger.error(f"Unexpected error in script generation: {str(e)}")
+                raise Exception(f"Failed to generate podcast script: {str(e)}")
+
+        except ValueError as e:
+            logger.error(f"Validation error: {str(e)}")
+            raise
         except Exception as e:
-            raise Exception(f"Failed to generate podcast script: {str(e)}")
+            logger.error(f"Script generation failed: {str(e)}")
+            raise
