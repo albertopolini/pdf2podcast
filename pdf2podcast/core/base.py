@@ -141,7 +141,7 @@ class BaseTTS(ABC):
         text: str,
         output_path: str,
         voice_id: Optional[str] = None,
-        **kwargs: Dict[str, Any]
+        **kwargs: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Convert text to speech and save as audio file.
@@ -165,8 +165,8 @@ class BasePodcastGenerator:
     def __init__(
         self,
         rag_system: BaseRAG,
-        llm_type: str,
-        tts_type: str,
+        llm_provider: str,
+        tts_provider: str,
         llm_config: Optional[Dict[str, Any]] = None,
         tts_config: Optional[Dict[str, Any]] = None,
         chunker: Optional[BaseChunker] = None,
@@ -178,8 +178,8 @@ class BasePodcastGenerator:
 
         Args:
             rag_system (BaseRAG): System for PDF text extraction
-            llm_type (str): Type of LLM to use ("gemini", "openai", etc.)
-            tts_type (str): Type of TTS to use ("aws", "google", etc.)
+            llm_provider (str): Type of LLM to use ("gemini", "openai", etc.)
+            tts_provider (str): Type of TTS to use ("aws", "google", etc.)
             llm_config (Optional[Dict[str, Any]]): Configuration for LLM
             tts_config (Optional[Dict[str, Any]]): Configuration for TTS
             chunker (Optional[BaseChunker]): System for text chunking
@@ -191,8 +191,8 @@ class BasePodcastGenerator:
         self.rag = rag_system
 
         # Initialize models using managers
-        llm_manager = LLMManager(llm_type, **(llm_config or {}))
-        tts_manager = TTSManager(tts_type, **(tts_config or {}))
+        llm_manager = LLMManager(llm_provider, **(llm_config or {}))
+        tts_manager = TTSManager(tts_provider, **(tts_config or {}))
 
         self.llm = llm_manager.get_llm()
         self.tts = tts_manager.get_tts()
@@ -207,7 +207,7 @@ class BasePodcastGenerator:
         complexity: str = "intermediate",
         voice_id: Optional[str] = None,
         query: Optional[str] = None,
-        **kwargs: Dict[str, Any]
+        **kwargs: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Generate a podcast from a PDF document.

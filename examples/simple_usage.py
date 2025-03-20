@@ -2,43 +2,42 @@
 Simple example demonstrating basic usage of pdf2podcast library.
 """
 
-from ..pdf2podcast import PodcastGenerator, SimplePDFProcessor
 import os
 from dotenv import load_dotenv
+from pdf2podcast import PodcastGenerator, SimplePDFProcessor
 
 
 def main():
     # Load environment variables
     load_dotenv()
 
-    # Get API keys from environment
-    google_api_key = os.getenv("GENAI_API_KEY")
-    if not google_api_key:
+    # Get API key from environment
+    api_key = os.getenv("GENAI_API_KEY")
+    if not api_key:
         raise ValueError("Please set GENAI_API_KEY environment variable")
 
-    # Initialize components
+    # Initialize PDF processor
     pdf_processor = SimplePDFProcessor()
 
-    # Create podcast generator with configuration
+    # Create podcast generator with basic configuration
     generator = PodcastGenerator(
         rag_system=pdf_processor,
-        llm_type="gemini",
-        tts_type="aws",
-        llm_config={
-            "api_key": google_api_key,
-            "model_name": "gemini-1.5-flash",
-            "temperature": 0.2,
-        },
-        tts_config={"voice_id": "Joanna", "region_name": "eu-central-1"},
+        llm_provider="gemini",  # Specify LLM provider
+        tts_provider="google",  # Specify TTS provider
+        llm_config={"api_key": api_key, "max_output_tokens": 4096, "temperature": 0.2},
+        tts_config={"language": "en", "tld": "com", "slow": False},
     )
 
-    # Generate podcast
     try:
+        # Generate podcast
         result = generator.generate(
-            pdf_path="sample.pdf",  # Replace with your PDF file
+            pdf_path="sample.pdf",
             output_path="output.mp3",
             complexity="intermediate",
+            audience="general",  # Specify target audience
         )
+
+        # Show results
         print("✅ Podcast generated successfully!")
         print(f"📝 Script length: {len(result['script'])} characters")
         print(f"🎧 Audio file: {result['audio']['path']}")

@@ -2,9 +2,8 @@
 Advanced example demonstrating comprehensive usage of pdf2podcast library.
 
 This example shows:
-- PDF processing with text cleaning
-- LLM configuration for optimal script generation
-- Advanced TTS settings
+- Custom storytelling prompt builder usage
+- Advanced PDF processing settings
 - Error handling and logging
 """
 
@@ -14,6 +13,7 @@ import logging
 from dotenv import load_dotenv
 
 from pdf2podcast import PodcastGenerator, SimplePDFProcessor
+from pdf2podcast.examples.custom_prompts import StorytellingPromptBuilder
 
 # Configure logging
 logging.basicConfig(
@@ -28,8 +28,6 @@ def setup_environment():
 
     required_vars = {
         "GENAI_API_KEY": "Google API key for Gemini",
-        "AWS_ACCESS_KEY_ID": "AWS access key for Polly",
-        "AWS_SECRET_ACCESS_KEY": "AWS secret key for Polly",
     }
 
     missing = []
@@ -44,61 +42,68 @@ def setup_environment():
         )
 
 
+def generate_storytelling_podcast():
+    """Generate a podcast using storytelling style."""
+    # Initialize components with storytelling configuration
+    pdf_processor = SimplePDFProcessor(
+        max_chars_per_chunk=6000,  # Larger chunks for better context
+        extract_images=True,  # Include image captions if available
+        metadata=True,  # Include document metadata
+    )
+
+    # Create generator with storytelling prompt builder
+    generator = PodcastGenerator(
+        rag_system=pdf_processor,
+        llm_provider="gemini",
+        tts_provider="google",
+        llm_config={
+            "api_key": os.getenv("GENAI_API_KEY"),
+            "model_name": "gemini-1.5-flash",
+            "max_output_tokens": 8000,
+            "temperature": 0.3,
+            "prompt_builder": StorytellingPromptBuilder(),  # Use storytelling style
+        },
+        tts_config={"language": "en", "tld": "com", "slow": False},
+    )
+
+    return generator.generate(
+        pdf_path="sample.pdf",
+        output_path="output_story.mp3",
+        complexity="advanced",  # Higher complexity for detailed content
+        audience="enthusiasts",  # Target technically interested audience
+        query="Explain the main concepts and their practical applications",
+    )
+
+
+def save_script(script: str, filename: str):
+    """Save generated script to file."""
+    script_dir = Path("output")
+    script_dir.mkdir(exist_ok=True)
+
+    script_path = script_dir / filename
+    script_path.write_text(script)
+    logger.info(f"💾 Script saved to: {script_path}")
+
+
 def main():
     try:
         # Ensure environment is properly configured
         setup_environment()
 
-        # Initialize PDF processor with custom settings
-        pdf_processor = SimplePDFProcessor(
-            max_chars_per_chunk=8000  # Increased chunk size for better context
-        )
-
-        # Create podcast generator with detailed configuration
-        generator = PodcastGenerator(
-            rag_system=pdf_processor,
-            llm_type="gemini",
-            tts_type="aws",
-            llm_config={
-                "api_key": os.getenv("GENAI_API_KEY"),
-                "model_name": "gemini-1.5-flash",
-                "temperature": 0.3,  # Lower temperature for more focused output
-                "top_p": 0.9,
-                "max_output_tokens": 8192,  # Increased for longer scripts
-                "streaming": True,  # Enable streaming for better performance
-            },
-            tts_config={
-                "voice_id": "Matthew",
-                "region_name": "us-west-2",
-                "engine": "neural",  # Use neural engine for better quality
-            }
-        )
-
-        # Ensure output directory exists
+        # Create output directory
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
 
-        # Generate podcast with advanced settings
-        result = generator.generate(
-            pdf_path="sample.pdf",
-            output_path=str(output_dir / "podcast.mp3"),
-            complexity="advanced",  # Generate detailed, technical content
-            voice_id="Matthew",  # Override default voice
-            # Additional parameters for fine-tuning
-            temperature=0.4,  # Override LLM temperature for this generation
-        )
+        # Generate storytelling version
+        logger.info("Generating storytelling version...")
+        result = generate_storytelling_podcast()
 
-        # Log results
-        logger.info("✅ Podcast generated successfully!")
-        logger.info(f"📄 Input PDF: sample.pdf")
+        # Save and log results
+        save_script(result["script"], "storytelling_script.txt")
+        logger.info("✅ Storytelling version complete")
         logger.info(f"📝 Script length: {len(result['script'])} characters")
         logger.info(f"🎧 Audio file: {result['audio']['path']}")
         logger.info(f"📊 Audio size: {result['audio']['size']} bytes")
-
-        # Save the generated script for reference
-        script_path = output_dir / "script.txt"
-        script_path.write_text(result["script"])
-        logger.info(f"💾 Script saved to: {script_path}")
 
     except ValueError as e:
         logger.error(f"❌ Configuration error: {str(e)}")

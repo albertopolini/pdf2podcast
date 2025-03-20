@@ -1,298 +1,289 @@
-# pdf2podcast
+# PDF2Podcast 🎙️
 
-A Python library to convert PDF documents into podcasts using LLMs and Text-to-Speech.
+Transform PDF documents into engaging, narrative-driven audio content using state-of-the-art AI technology.
+
+[![PyPI version](https://badge.fury.io/py/pdf2podcast.svg)](https://badge.fury.io/py/pdf2podcast)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Overview
+
+PDF2Podcast leverages advanced RAG (Retrieval Augmented Generation) technology, LLMs, and TTS capabilities to convert technical documents into professional, narrative-style podcasts. It intelligently processes PDF content, maintains context across sections, and generates natural-sounding audio output.
+
+## Key Features
+
+🔍 **Smart Document Processing**
+- Advanced PDF text extraction with support for complex layouts
+- Image caption extraction and metadata integration
+- Intelligent chunking with semantic context preservation
+
+🧠 **AI-Powered Content Generation**
+- Context-aware content transformation using RAG technology
+- Customizable complexity levels and audience targeting
+- Support for narrative-style content generation
+
+🗣️ **Professional Audio Output**
+- High-quality text-to-speech synthesis
+- Multiple voice provider options
+- Natural pacing and pronunciation
+
+⚙️ **Flexible Configuration**
+- Modular architecture for easy extension
+- Configurable LLM and TTS providers
+- Custom prompt builder support
+
+## Table of Contents
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Advanced Usage](#advanced-usage)
+  - [Custom Prompt Builders](#custom-prompt-builders)
+  - [Provider Configuration](#provider-configuration)
+- [Configuration Reference](#configuration-reference)
+- [Environment Setup](#environment-setup)
+- [Error Handling](#error-handling)
+- [License](#license)
 
 ## Installation
+
+Install PDF2Podcast using pip:
 
 ```bash
 pip install pdf2podcast
 ```
 
-## Requirements
-
-- Python 3.8 or higher
-- Google API key for Gemini LLM
-- AWS credentials for Polly TTS (optional, can use Google TTS instead)
-
-## Dependencies
-
-This library uses several key technologies:
-
-- **Text Processing**
-  - `PyMuPDF`: Advanced PDF processing with metadata and image caption extraction
-  - `sentence-transformers`: Text embeddings for semantic analysis
-  - `faiss-cpu`: Fast similarity search for text chunks
-  
-- **Language Models**
-  - `langchain-google-genai`: Integration with Google's Gemini LLM
-  - `langchain-community`: Core LangChain functionality
-  - `accelerate`: ML model optimization
-  
-- **Text-to-Speech**
-  - `boto3`: AWS Polly integration for high-quality TTS
-  - `ffmpeg-python`: Audio processing and manipulation
-  - `gTTS`: Google Text-to-Speech alternative
-
-- **Utils**
-  - `python-dotenv`: Environment variable management
-  - `pydantic`: Data validation and settings management
-  - `datasets`: Data handling utilities
-
 ## Quick Start
+
+Here's a basic example to get you started with PDF2Podcast:
 
 ```python
 from pdf2podcast import PodcastGenerator, SimplePDFProcessor
+import os
+from dotenv import load_dotenv
 
-# Initialize PDF processor with advanced features
-pdf_processor = SimplePDFProcessor(
-    max_chars_per_chunk=8000,    # Customize chunk size
-    extract_images=True,         # Include image captions
-    metadata=True               # Include document metadata
-)
+# Load environment variables for API keys
+load_dotenv()
 
-# Create podcast generator with configuration
+# Initialize the PDF processor
+# This component handles document reading, content extraction, and chunking
+pdf_processor = SimplePDFProcessor()
+
+# Create a podcast generator instance with basic configuration
+# - llm_provider: Specifies which LLM service to use (currently supports "gemini")
+# - tts_provider: Specifies which TTS service to use ("google" or "aws")
+# - llm_config: Configuration for the LLM service
+# - tts_config: Configuration for the TTS service
 generator = PodcastGenerator(
     rag_system=pdf_processor,
-    llm_type="gemini",      # Specify LLM provider
-    tts_type="aws",         # Specify TTS provider
+    llm_provider="gemini",         # Using Google's Gemini model
+    tts_provider="google",         # Using Google's TTS service
     llm_config={
-        "api_key": "your_google_api_key",
-        "model_name": "gemini-1.5-flash",
-        "temperature": 0.2
+        "api_key": os.getenv("GENAI_API_KEY"),  # API key from environment variables
+        "max_output_tokens": 4096,  # Maximum length of generated content
+        "temperature": 0.2         # Controls creativity vs determinism (0.0-1.0)
     },
     tts_config={
-        "voice_id": "Joanna",
-        "region_name": "us-west-2"
+        "language": "en",          # Output language
+        "tld": "com",             # TLD for accent selection
+        "slow": False             # Normal speech rate
     }
 )
 
-# Generate podcast
+# Generate the podcast
+# - complexity: Controls content complexity ("simple", "intermediate", "advanced")
+# - audience: Target audience type ("general", "enthusiasts", "professionals", "experts")
 result = generator.generate(
-    pdf_path="document.pdf",
-    output_path="podcast.mp3",
-    complexity="intermediate",  # Options: "simple", "intermediate", "advanced"
-    voice_id="Joanna"  # Optional: override default voice
+    pdf_path="sample.pdf",         # Input PDF file
+    output_path="output.mp3",      # Output audio file
+    complexity="intermediate",      # Moderate technical depth
+    audience="general"             # General audience targeting
 )
 
-# Access results
-print(f"Generated podcast: {result['audio']['path']}")
-print(f"Audio size: {result['audio']['size']} bytes")
+# The result contains:
+# - script: The generated narrative script
+# - audio: Dictionary with audio file details (path, size)
+print(f"Generated audio file: {result['audio']['path']}")
 print(f"Script length: {len(result['script'])} characters")
 ```
 
-## Available Providers
+This basic example demonstrates:
+1. Setting up the PDF processor for content extraction
+2. Configuring the podcast generator with LLM and TTS providers
+3. Generating a podcast with customized complexity and audience targeting
+4. Accessing the generated content and audio file
 
-### LLM Providers
-- `"gemini"`: Google's Gemini LLM
-  - Requires: GENAI_API_KEY
-  - Configuration options:
-    - model_name: Model version to use
-    - temperature: Output randomness (0-1)
-    - max_output_tokens: Maximum output length
-    - top_p: Nucleus sampling parameter
-    - streaming: Enable/disable streaming mode
-    - prompt_builder: Custom prompt builder instance
+## Advanced Usage
 
-### TTS Providers
-- `"aws"`: Amazon Polly
-  - Requires: AWS credentials
-  - Configuration options:
-    - voice_id: Voice to use (e.g., "Joanna", "Matthew")
-    - region_name: AWS region
-    - engine: "standard" or "neural"
-    
-- `"google"`: Google Text-to-Speech
-  - No API key required
-  - Configuration options:
-    - language: Language code (e.g., "en", "es")
-    - tld: Top-level domain for accent (e.g., "com", "co.uk")
-    - slow: Speech speed
+### Custom Prompt Builders
 
-## PDF Processing Features
-
-The library offers advanced PDF processing capabilities:
-
-### Basic Features
-- Metadata extraction (title, author, subject, keywords)
-- Image caption extraction from documents
-- Efficient processing of large documents
-- Support for complex PDF layouts
-
-### Text Processing
-- Smart text chunking with customizable size
-- Paragraph-aware text splitting
-- Sentence boundary preservation
-
-### Semantic Search & Retrieval
-- Vector-based semantic search using FAISS
-- Embedding generation with Sentence Transformers
-- Retrieval of relevant text chunks based on queries
-
-## Configuration
-
-### Environment Variables
-
-You can set these environment variables instead of passing them directly:
-
-```
-GENAI_API_KEY=your_google_api_key
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-AWS_DEFAULT_REGION=your_aws_region
-```
-
-### Advanced Configuration Examples
-
-#### High-Quality Production Setup
-```python
-generator = PodcastGenerator(
-    rag_system=processor,
-    llm_type="gemini",
-    tts_type="aws",
-    llm_config={
-        "model_name": "gemini-1.5-flash",
-        "temperature": 0.2,
-        "top_p": 0.9,
-        "max_output_tokens": 8192,
-        "streaming": True
-    },
-    tts_config={
-        "voice_id": "Joanna",
-        "engine": "neural",
-        "region_name": "us-west-2"
-    }
-)
-```
-
-#### Fast Development Setup
-```python
-generator = PodcastGenerator(
-    rag_system=processor,
-    llm_type="gemini",
-    tts_type="google",  # Faster, no API key needed
-    llm_config={
-        "temperature": 0.3,
-        "max_output_tokens": 4096
-    },
-    tts_config={
-        "language": "en",
-        "tld": "com"
-    }
-)
-```
-
-## Custom Prompt Builders
-
-You can customize how content is processed by creating custom prompt builders:
+PDF2Podcast supports custom prompt builders to control how content is transformed into narrative form. The library includes a `StorytellingPromptBuilder` that creates engaging, story-like narratives from technical content:
 
 ```python
-from pdf2podcast.core.base import BasePromptBuilder
+from pdf2podcast import PodcastGenerator, SimplePDFProcessor
+from pdf2podcast.examples.custom_prompts import StorytellingPromptBuilder
 
-class TechnicalPromptBuilder(BasePromptBuilder):
-    """Specialized for technical documentation."""
-    
-    def build_prompt(self, text: str, **kwargs) -> str:
-        return (
-            "Create a technical podcast script following these guidelines:\n"
-            "1. Start with a high-level overview\n"
-            "2. Break down complex concepts step by step\n"
-            "3. Include practical examples\n\n"
-            f"Content: {text}\n"
-            f"Complexity: {kwargs.get('complexity', 'intermediate')}"
-        )
+# Initialize PDF processor with advanced settings
+pdf_processor = SimplePDFProcessor(
+    max_chars_per_chunk=6000,  # Larger chunks for better context
+    extract_images=True,       # Include image captions in processing
+    metadata=True             # Include document metadata
+)
 
-# Use custom prompt builder
+# Create generator with storytelling configuration
 generator = PodcastGenerator(
-    rag_system=processor,
-    llm_type="gemini",
-    tts_type="aws",
+    rag_system=pdf_processor,
+    llm_provider="gemini",
+    tts_provider="google",
     llm_config={
-        "prompt_builder": TechnicalPromptBuilder(),
-        "temperature": 0.2
-    }
-)
-```
-
-## Common Use Cases
-
-### Academic Paper Processing
-```python
-generator = PodcastGenerator(
-    rag_system=SimplePDFProcessor(
-        max_chars_per_chunk=8000,
-        extract_images=True,
-        metadata=True
-    ),
-    llm_type="gemini",
-    tts_type="aws",
-    llm_config={
-        "temperature": 0.2,
-        "max_output_tokens": 8192
-    },
-    tts_config={
-        "voice_id": "Joanna",
-        "engine": "neural"
-    }
-)
-
-result = generator.generate(
-    pdf_path="paper.pdf",
-    output_path="paper_podcast.mp3",
-    complexity="advanced",
-    query="Focus on methodology and key findings"
-)
-```
-
-### Business Report Summary
-```python
-generator = PodcastGenerator(
-    rag_system=SimplePDFProcessor(
-        max_chars_per_chunk=4000
-    ),
-    llm_type="gemini",
-    tts_type="aws",
-    llm_config={
-        "temperature": 0.3,
-        "max_output_tokens": 4096
-    }
-)
-
-result = generator.generate(
-    pdf_path="report.pdf",
-    output_path="summary.mp3",
-    complexity="intermediate",
-    query="Summarize key business metrics and trends"
-)
-```
-
-### Educational Content
-```python
-generator = PodcastGenerator(
-    rag_system=SimplePDFProcessor(extract_images=True),
-    llm_type="gemini",
-    tts_type="google",
-    llm_config={
-        "temperature": 0.4,
-        "max_output_tokens": 6144
+        "api_key": os.getenv("GENAI_API_KEY"),
+        "model_name": "gemini-1.5-flash",    # Specific model version
+        "max_output_tokens": 8000,           # Longer output for stories
+        "temperature": 0.3,                  # Slightly more creative
+        "prompt_builder": StorytellingPromptBuilder()  # Enable storytelling mode
     },
     tts_config={
         "language": "en",
         "tld": "com",
-        "slow": True  # Better for learning
+        "slow": False
     }
 )
 
+# Generate a narrative-style podcast
 result = generator.generate(
-    pdf_path="lesson.pdf",
-    output_path="tutorial.mp3",
-    complexity="simple"
+    pdf_path="sample.pdf",
+    output_path="output.mp3",
+    complexity="advanced",        # Detailed technical content
+    audience="enthusiasts",      # For technically interested listeners
+    query="Explain the main concepts and their practical applications"
 )
 ```
 
-## Contributing
+The StorytellingPromptBuilder transforms content by:
+- Creating engaging hooks and openings
+- Building narrative tension around technical concepts
+- Presenting solutions as revelations
+- Maintaining technical accuracy while being engaging
+- Adapting language and examples to the target audience
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+### Provider Configuration
+
+#### LLM Provider Settings
+
+The library currently supports Google's Gemini as the LLM provider:
+
+```python
+# Full configuration options for Gemini
+generator = PodcastGenerator(
+    llm_provider="gemini",  # Specify Gemini as provider
+    llm_config={
+        "api_key": os.getenv("GENAI_API_KEY"),
+        "model_name": "gemini-1.5-flash",  # Model version (optional)
+        "max_output_tokens": 4096,         # Maximum response length
+        "temperature": 0.2,                # Creativity control (0.0-1.0)
+        "top_p": 0.9,                     # Nucleus sampling parameter
+        "streaming": False                 # Enable/disable streaming
+    },
+    ...
+    
+)
+```
+
+#### TTS Provider Settings
+
+Two TTS providers are supported with their own configuration options:
+
+**Google TTS**
+```python
+# Google TTS configuration
+generator = PodcastGenerator(
+    tts_provider="google",  # Use Google's TTS service
+    tts_config={
+        "language": "en",    # Language code
+        "tld": "com",       # Top-level domain for accent
+        "slow": False,      # Speech rate
+    },
+    ...
+)
+```
+
+**AWS Polly**
+```python
+# AWS Polly configuration
+generator = PodcastGenerator(
+    tts_provider="aws",  # Use AWS Polly
+    tts_config={
+        "voice_id": "Joanna",          # Voice selection
+        "region_name": "eu-central-1", # AWS region
+        "engine": "neural",            # Neural TTS engine
+        # Additional options:
+        # "sample_rate": 22050,        # Audio sample rate
+        # "audio_format": "mp3"        # Output format
+    },
+    ...
+)
+```
+
+## Configuration Reference
+
+### Complexity Levels
+
+| Level | Description | Best For |
+|-------|-------------|-----------|
+| simple | Basic terms, clear explanations | General audience, introductory content |
+| intermediate | Balanced technical depth | Students, professionals |
+| advanced | Full technical detail | Experts, technical documentation |
+
+### Audience Types
+
+| Type | Description | Content Adaptation |
+|------|-------------|-------------------|
+| general | No technical background | Focus on practical understanding |
+| enthusiasts | Interest-driven knowledge | Hobby and DIY applications |
+| professionals | Working knowledge | Industry applications |
+| experts | Deep domain knowledge | Advanced concepts |
+
+## Environment Setup
+
+Required environment variables:
+
+```env
+# Gemini API Configuration
+GENAI_API_KEY=your_gemini_api_key
+
+# AWS Polly Configuration (if using)
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+AWS_REGION=your_aws_region
+```
+
+## Error Handling
+
+PDF2Podcast provides comprehensive error handling with specific exceptions:
+
+```python
+try:
+    # Attempt to generate podcast
+    result = generator.generate(
+        pdf_path="sample.pdf",
+        output_path="output.mp3"
+    )
+except ValueError as e:
+    # Handle configuration errors
+    print(f"Configuration error: {str(e)}")
+    # Example: Invalid API keys, unsupported providers
+except FileNotFoundError as e:
+    # Handle file access errors
+    print(f"File error: {str(e)}")
+    # Example: PDF not found, output directory issues
+except Exception as e:
+    # Handle other processing errors
+    print(f"Processing error: {str(e)}")
+    # Example: Network issues, service failures
+```
+
+Common errors and solutions:
+- Configuration errors: Check API keys and provider settings
+- File errors: Verify file paths and permissions
+- Processing errors: Check network connection and service status
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
